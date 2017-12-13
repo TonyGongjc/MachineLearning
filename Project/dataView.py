@@ -4,6 +4,9 @@ import time
 from os import listdir
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+from Variance import feaSelection
+from Helper import Helper
+
 
 class Sift(object):
     def __init__(self, THRESH = 250000, options = 1, component=50):
@@ -15,24 +18,38 @@ class Sift(object):
         self.component=component
 
     def train(self):
+        h = Helper()
         trainingFileList = listdir('data/newdirectionkeys')
         m = len(trainingFileList)
+        if self.option == 3:
+            choosing = Sift.Rftraining(self.component)
+
+        if self.option == 4:
+            choosing = Sift.LStraining(self.component)
+
         for i in range(m-1):
             errorcount = 0.0
             count = 0.0
 
             fileNameStr = 'data/newdirectionkeys/s_discriptor_' + str(i + 1) + '.key'
-            Coordinates_1, trainingMat_1 = self._read_file(fileNameStr)
+            Coordinates_1, trainingMat_1 = h.read_file(fileNameStr)
 
             fileNameStr = 'data/newdirectionkeys/s_discriptor_' + str(i + 2) + '.key'
-            Coordinates_2, trainingMat_2 = self._read_file(fileNameStr)
+            Coordinates_2, trainingMat_2 = h.read_file(fileNameStr)
 
             fileNameStr = 'data/NewMatchPairs/s_MatchPair_' + str(i + 1) + '.key'
-            MatchPair = self._load_pair(fileNameStr)
+            MatchPair = h.load_pair(fileNameStr)
 
             if(self.option==2):
                 trainingMat_1, trainingMat_2 = self._PCAtraining(trainingMat_1, trainingMat_2, self.component)
 
+            if(self.option==3):
+                trainingMat_1 = dot(trainingMat_1,choosing)
+                trainingMat_2 = dot(trainingMat_2,choosing)
+
+            if(self.option==4):
+                trainingMat_1 = dot(trainingMat_1, choosing)
+                trainingMat_2 = dot(trainingMat_2, choosing)
 
             crossProduct = (dot(trainingMat_1, trainingMat_2.transpose()))
             ratio, maxVector, maxPosition = self._maxP(crossProduct)
@@ -59,20 +76,6 @@ class Sift(object):
             print("The recall is ", self.recall[i])
 
 
-    def _read_file(self,filename):
-        row = sum(1 for line in open(filename))
-        returnVect = zeros((row,128))
-        coordinate = zeros((row,2))
-        fr = open(filename)
-        for i in range(row):
-            lineStr = fr.readline()
-            lineStr = lineStr.split()
-            for j in range(130):
-                if(j>1):
-                    returnVect[i,j-2] = int(lineStr[j])
-                else:
-                    coordinate[i,j] = int(lineStr[j])
-        return coordinate,returnVect
 
     def _maxP(self,crossProduct):
         '''
@@ -95,16 +98,7 @@ class Sift(object):
             ratio[i] = maxVector[i, 0] / maxVector[i, 1]
         return ratio, maxVector, maxPosition
 
-    def _load_pair(self,filename):
-        row = sum(1 for line in open(filename))
-        MatchPair = zeros((row, 4))
-        fr = open(filename)
-        for i in range(row):
-            lineStr = fr.readline()
-            lineStr = lineStr.split()
-            for j in range(4):
-                MatchPair[i, j] = int(lineStr[j])
-        return MatchPair
+
 
     def _errorCheck(self,Combine, MatchPair):
         for i in range(MatchPair.shape[0]):
@@ -120,17 +114,49 @@ class Sift(object):
         newTrainingData = pcaTrain.transform(Mat)
         return newTrainingData[:row_1], newTrainingData[row_1:]
 
+    @staticmethod
+    def Rftraining(featureNumber):
+        print("Start RandomForest Feature Selection...\n")
+        f = feaSelection()
+        totalMat, totalLabel = f.getTrainingData(start=15,end=19)
+        indices, importances = f.RFresult(totalMat, totalLabel)
+        diagonal = zeros((128,128))
+        for i in range(featureNumber):
+            diagonal[(indices[i],indices[i])] = 1
+        print("RandomForest Stop\n")
+        return diagonal
+
+    @staticmethod
+    def LStraining(featureNumber):
+        print("Start LASSO Feature Selection\n")
+        f = feaSelection()
+        totalMat, totalLabel = f.getTrainingData(end=3)
+        indices, importances = f.LSresult(totalMat, totalLabel)
+        diagonal = zeros((128, 128))
+        for i in range(featureNumber):
+            diagonal[(indices[i], indices[i])] = 1
+        print("LASSO Stop\n")
+        return diagonal
+
     def show(self):
         plt.figure(0)
+        plt.title("ErrorRatio")
+        plt.xlabel("Image No.")
         plt.plot(self.errorRatio)
+        plt.ylim((0,0.5))
+   #     plt.xticks(linspace(1,113,28))
         plt.show()
         plt.figure(1)
+        plt.title("RecallRate")
+        plt.xlabel("Image No.")
         plt.plot(self.recall)
+        plt.ylim((0,0.8))
+      #  plt.xticks(linspace(1, 113, 28))
         plt.show()
 
 
 if __name__ == "__main__":
-    sift= Sift(THRESH=120000,options=2,component=16)
+    sift= Sift(THRESH=170000,options=4,component=32)
     sift.train()
     sift.show()
 
